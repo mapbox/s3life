@@ -3,6 +3,8 @@ s3life
 
 Helper for managing S3 lifecycle policies.
 
+    sudo npm install -g https://github.com/mapbox/s3life/tarball/master
+
     Usage:
       s3life <bucket> ls
       s3life <bucket> add <prefix> [expire|glacier] <days>
