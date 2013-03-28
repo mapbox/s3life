@@ -1,0 +1,10 @@
+{
+    "name": "s3life",
+    "version": "0.0.1",
+    "description": "Helper for setting s3 lifecycle policy.",
+    "private": true,
+    "dependencies": { "knox": "0.6.x" },
+    "main": "./s3life",
+    "bin": { "s3life": "./s3life" },
+    "engines": { "node": ">= 0.6.x" }
+}

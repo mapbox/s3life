@@ -1,0 +1,203 @@
+#!/usr/bin/env node
+
+try {
+    var s3cfg = require('fs').readFileSync(require('path').join(process.env.HOME, '.s3cfg'), 'utf8');
+    var awsKey = s3cfg.match(/access_key = (.*)/)[1];
+    var awsSecret = s3cfg.match(/secret_key = (.*)/)[1];
+} catch(err) {
+    console.warn('Could not read AWS credentials from .s3cfg.');
+    process.exit(1);
+}
+
+var util = require('util');
+var readline = require('readline');
+var crypto = require('crypto');
+var argv = process.argv;
+var bucket = argv[2];
+var action = argv[3] || 'ls';
+var args = [argv[4], argv[5], argv[6]];
+
+function usage() {
+    console.warn('Usage:');
+    console.warn('  s3life <bucket>');
+    console.warn('  s3life <bucket> ls');
+    console.warn('  s3life <bucket> add <prefix> [glacier|expire] <days>');
+    console.warn('  s3life <bucket> rm <prefix>');
+    console.warn('  s3life <bucket> del');
+    process.exit(1);
+}
+
+if (!bucket) return usage();
+if (!action) return usage();
+
+var knox = require('knox');
+var s3 = knox.createClient({key:awsKey, secret:awsSecret, bucket:bucket});
+
+s3.getFile('/?lifecycle', function(err, res) {
+    if (err) throw err;
+    var chunk = '';
+    res.on('error', function(err) { throw err });
+    res.on('close', function(err) { throw err });
+    res.on('data', function(data) { chunk += data });
+    res.on('end', function() {
+        var rules = chunk.split('<Rule>').slice(1).map(function(xml) {
+            var rule = {};
+            rule.id = (xml.match(/<ID>([^<]*)<\/ID>/)||[])[1];
+            rule.prefix = (xml.match(/<Prefix>([^<]*)<\/Prefix>/)||[])[1];
+            rule.status = (xml.match(/<Status>([^<]*)<\/Status>/)||[])[1];
+            rule.expire = (xml.match(/<Expiration><Days>([^<]*)<\/Days><\/Expiration>/)||[])[1];
+            rule.glacier = (xml.match(/<Days>([^<]*)<\/Days><StorageClass>GLACIER<\/StorageClass>/)||[])[1];
+            if (!rule.id) throw new Error('No id found.');
+            if (!rule.prefix) throw new Error('No prefix found.');
+            if (!rule.status) throw new Error('No status found.');
+            if (!rule.expire && !rule.glacier) throw new Error('No expire/glacier transition found.');
+            return rule;
+        });
+
+        lifecycle(rules, action, args);
+    });
+});
+
+function lifecycle(rules, action, args) {
+    switch (action) {
+    case 'ls':
+        if (!rules.length) {
+            console.log('No lifecycle rules found.');
+            process.exit(0);
+        }
+        rules.forEach(function(rule) {
+            console.log('%s %s %s %s',
+                rule.status === 'Enabled' ? '✔' : '✖',
+                pad(rule.prefix, 30),
+                pad(rule.glacier ? rule.glacier + 'd ➞ glc' : '', 9),
+                pad(rule.expire ? rule.expire + 'd ➞ del' : '', 9)
+            );
+        });
+        break;
+    case 'rm':
+        if (!args[0]) return usage();
+
+        // Remove rule.
+        var filtered = rules.filter(function(rule) { return rule.prefix !== args[0] });
+        if (rules.length === filtered.length) {
+            console.warn('No rules with prefix %s found.', args[0]);
+            process.exit(1)
+        };
+
+        // If removing very last rule, delete policy doc.
+        if (!filtered.length) return lifecycle(rules, 'del');
+
+        var xml = doc(filtered);
+        s3.putBuffer(xml, '/?lifecycle', {
+            'Content-MD5': crypto.createHash('md5').update(xml).digest('base64')
+        }, function(err, res) {
+            if (err) throw err;
+            if (res.statusCode === 200) {
+                console.log('Removed lifecycle rule.');
+                process.exit(0);
+            } else {
+                var chunk = '';
+                res.on('data', function(data) { chunk += data });
+                res.on('end', function() { console.log(chunk) });
+            }
+        });
+        break;
+    case 'add':
+        if (!args[0]) return usage();
+        if (args[1] !== 'expire' && args[1] !== 'glacier') return usage();
+        if (!(parseInt(args[2], 10) > 0)) return usage();
+
+        var days = (parseInt(args[2], 10)).toString();
+
+        // Add templated rule(s).
+        // @TODO add other templating patterns.
+        if (/({hex}|{dec})/.test(args[0])) {
+            var matches = args[0].match(/({hex}|{dec})/g);
+            var prefixes = [args[0]];
+            var makeRules = function(prefixes, matches) {
+                if (!matches.length) return prefixes;
+                var m = matches.shift();
+                var l = m === '{hex}' ? 16 : 10;
+                var p = [];
+                prefixes.forEach(function(prefix) {
+                    for (i = 0; i < l; i++) p.push(prefix.replace(m, (i).toString(16)));
+                });
+                return makeRules(p, matches);
+            };
+            rules = rules.concat(makeRules(prefixes, matches).map(function(prefix) {
+                return {
+                    id: '',
+                    prefix: prefix,
+                    expire: args[1] === 'expire' ? days : null,
+                    glacier: args[1] === 'glacier' ? days : null
+                };
+            }));
+        // Add single rule.
+        } else {
+            rules.push({
+                id: '',
+                prefix: args[0],
+                expire: args[1] === 'expire' ? days : null,
+                glacier: args[1] === 'glacier' ? days : null
+            });
+        }
+
+        var xml = doc(rules);
+        s3.putBuffer(xml, '/?lifecycle', {
+            'Content-MD5': crypto.createHash('md5').update(xml).digest('base64')
+        }, function(err, res) {
+            if (err) throw err;
+            if (res.statusCode === 200) {
+                console.log('Added lifecycle rule.');
+                process.exit(0);
+            } else {
+                var chunk = '';
+                res.on('data', function(data) { chunk += data });
+                res.on('end', function() { console.log(chunk) });
+            }
+        });
+        break;
+    case 'del':
+        if (!rules.length) {
+            console.log('No lifecycle rules found.');
+            process.exit(0);
+        }
+        var rl = readline.createInterface({
+            input: process.stdin,
+            output: process.stdout
+        });
+        rl.question('Remove all lifecycle rules from bucket ' + bucket + '? [y/N] ', function(resp) {
+            if (resp !== 'y') process.exit(0);
+            s3.deleteFile('/?lifecycle', function(err, res) {
+                if (err) throw err;
+                if (res.statusCode === 204) {
+                    console.log('Removed all lifecycle rules.');
+                    process.exit(0);
+                } else {
+                    var chunk = '';
+                    res.on('data', function(data) { chunk += data });
+                    res.on('end', function() { console.log(chunk) });
+                }
+            });
+        });
+        break;
+    }
+}
+
+function pad(str, len, r) {
+    while (str.length < len) str = r ? ' ' + str : str + ' ';
+    return str;
+}
+
+function doc(rules) {
+    var xml = [];
+    xml.push('<LifecycleConfiguration>');
+    xml = xml.concat(rules.map(function(rule) {
+        return rule.expire
+            ? util.format('<Rule><ID>%s</ID><Prefix>%s</Prefix><Status>Enabled</Status><Expiration><Days>%s</Days></Expiration></Rule>', rule.id, rule.prefix, rule.expire)
+            : util.format('<Rule><ID>%s</ID><Prefix>%s</Prefix><Status>Enabled</Status><Transition><Days>%s</Days><StorageClass>GLACIER</StorageClass></Transition></Rule>', rule.id, rule.prefix, rule.glacier);
+    }));
+    xml.push('</LifecycleConfiguration>');
+    xml = xml.join('\n');
+    return xml;
+}
