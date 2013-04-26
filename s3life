@@ -48,7 +48,7 @@ s3.getFile('/?lifecycle', function(err, res) {
             rule.expire = (xml.match(/<Expiration><Days>([^<]*)<\/Days><\/Expiration>/)||[])[1];
             rule.glacier = (xml.match(/<Days>([^<]*)<\/Days><StorageClass>GLACIER<\/StorageClass>/)||[])[1];
             if (!rule.id) throw new Error('No id found.');
-            if (!rule.prefix) throw new Error('No prefix found.');
+            if (!'prefix' in rule) throw new Error('No prefix found.');
             if (!rule.status) throw new Error('No status found.');
             if (!rule.expire && !rule.glacier) throw new Error('No expire/glacier transition found.');
             return rule;
