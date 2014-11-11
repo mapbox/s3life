@@ -3,8 +3,8 @@
     "version": "0.0.1",
     "description": "Helper for setting s3 lifecycle policy.",
     "private": true,
-    "dependencies": { "knox": "0.6.x" },
+    "dependencies": { "aws-sdk": "^2.0.25" },
     "main": "./s3life",
     "bin": { "s3life": "./s3life" },
-    "engines": { "node": ">= 0.6.x" }
+    "engines": { "node": ">= 0.10.x" }
 }

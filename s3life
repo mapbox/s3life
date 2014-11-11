@@ -1,17 +1,7 @@
 #!/usr/bin/env node
 
-try {
-    var s3cfg = require('fs').readFileSync(require('path').join(process.env.HOME, '.s3cfg'), 'utf8');
-    var awsKey = s3cfg.match(/access_key = (.*)/)[1];
-    var awsSecret = s3cfg.match(/secret_key = (.*)/)[1];
-} catch(err) {
-    console.warn('Could not read AWS credentials from .s3cfg.');
-    process.exit(1);
-}
-
 var util = require('util');
 var readline = require('readline');
-var crypto = require('crypto');
 var argv = process.argv;
 var bucket = argv[2];
 var action = argv[3] || 'ls';
@@ -30,32 +20,22 @@ function usage() {
 if (!bucket) return usage();
 if (!action) return usage();
 
-var knox = require('knox');
-var s3 = knox.createClient({key:awsKey, secret:awsSecret, bucket:bucket});
+var AWS = require('aws-sdk');
+var s3 = new AWS.S3();
 
-s3.getFile('/?lifecycle', function(err, res) {
+s3.getBucketLifecycle({ Bucket: bucket }, function(err, data) {
     if (err) throw err;
-    var chunk = '';
-    res.on('error', function(err) { throw err });
-    res.on('close', function(err) { throw err });
-    res.on('data', function(data) { chunk += data });
-    res.on('end', function() {
-        var rules = chunk.split('<Rule>').slice(1).map(function(xml) {
-            var rule = {};
-            rule.id = (xml.match(/<ID>([^<]*)<\/ID>/)||[])[1];
-            rule.prefix = (xml.match(/<Prefix>([^<]*)<\/Prefix>/)||[])[1];
-            rule.status = (xml.match(/<Status>([^<]*)<\/Status>/)||[])[1];
-            rule.expire = (xml.match(/<Expiration><Days>([^<]*)<\/Days><\/Expiration>/)||[])[1];
-            rule.glacier = (xml.match(/<Days>([^<]*)<\/Days><StorageClass>GLACIER<\/StorageClass>/)||[])[1];
-            if (!rule.id) throw new Error('No id found.');
-            if (!'prefix' in rule) throw new Error('No prefix found.');
-            if (!rule.status) throw new Error('No status found.');
-            if (!rule.expire && !rule.glacier) throw new Error('No expire/glacier transition found.');
-            return rule;
-        });
-
-        lifecycle(rules, action, args);
+    var rules = data.Rules.map(function(rule) {
+        var toGlacier = rule.Transition && rule.Transition.StorageClass === 'GLACIER';
+        var result = {
+            id: rule.ID,
+            prefix: rule.Prefix,
+            status: rule.Status
+        };
+        if (toGlacier) result.glacier = rule.Transition.Days;
+        else result.expire = rule.Expiration.Days;
     });
+    lifecyle(rules, action, args);
 });
 
 function lifecycle(rules, action, args) {
@@ -78,36 +58,25 @@ function lifecycle(rules, action, args) {
         if (!args[0]) return usage();
 
         // Remove rule.
-        var filtered = rules.filter(function(rule) { return rule.prefix !== args[0] });
+        var filtered = rules.filter(function(rule) { return rule.prefix !== args[0]; });
         if (rules.length === filtered.length) {
             console.warn('No rules with prefix %s found.', args[0]);
-            process.exit(1)
-        };
+            process.exit(1);
+        }
 
         // If removing very last rule, delete policy doc.
         if (!filtered.length) return lifecycle(rules, 'del');
 
-        var xml = doc(filtered);
-        s3.putBuffer(xml, '/?lifecycle', {
-            'Content-MD5': crypto.createHash('md5').update(xml).digest('base64')
-        }, function(err, res) {
+        s3.putBucketLifecycle(getParams(bucket, filtered), function(err) {
             if (err) throw err;
-            if (res.statusCode === 200) {
-                console.log('Removed lifecycle rule.');
-                process.exit(0);
-            } else {
-                var chunk = '';
-                res.on('data', function(data) { chunk += data });
-                res.on('end', function() { console.log(chunk) });
-            }
+            console.log('Removed lifecycle rule.');
         });
         break;
     case 'add':
         if (!args[0]) return usage();
         if (args[1] !== 'expire' && args[1] !== 'glacier') return usage();
-        if (!(parseInt(args[2], 10) > 0)) return usage();
-
-        var days = (parseInt(args[2], 10)).toString();
+        var days = (parseInt(args[2], 10));
+        if (days <= 0) return usage();
 
         // Add templated rule(s).
         // @TODO add other templating patterns.
@@ -142,19 +111,9 @@ function lifecycle(rules, action, args) {
             });
         }
 
-        var xml = doc(rules);
-        s3.putBuffer(xml, '/?lifecycle', {
-            'Content-MD5': crypto.createHash('md5').update(xml).digest('base64')
-        }, function(err, res) {
+        s3.putBucketLifecycle(getParams(bucket, rules), function(err) {
             if (err) throw err;
-            if (res.statusCode === 200) {
-                console.log('Added lifecycle rule.');
-                process.exit(0);
-            } else {
-                var chunk = '';
-                res.on('data', function(data) { chunk += data });
-                res.on('end', function() { console.log(chunk) });
-            }
+            console.log('Added lifecycle rule.');
         });
         break;
     case 'del':
@@ -168,16 +127,9 @@ function lifecycle(rules, action, args) {
         });
         rl.question('Remove all lifecycle rules from bucket ' + bucket + '? [y/N] ', function(resp) {
             if (resp !== 'y') process.exit(0);
-            s3.deleteFile('/?lifecycle', function(err, res) {
+            s3.deleteBucketLifecycle({ Bucket: bucket }, function(err) {
                 if (err) throw err;
-                if (res.statusCode === 204) {
-                    console.log('Removed all lifecycle rules.');
-                    process.exit(0);
-                } else {
-                    var chunk = '';
-                    res.on('data', function(data) { chunk += data });
-                    res.on('end', function() { console.log(chunk) });
-                }
+                console.log('Removed all lifecycle rules.');
             });
         });
         break;
@@ -189,15 +141,24 @@ function pad(str, len, r) {
     return str;
 }
 
-function doc(rules) {
-    var xml = [];
-    xml.push('<LifecycleConfiguration>');
-    xml = xml.concat(rules.map(function(rule) {
-        return rule.expire
-            ? util.format('<Rule><ID>%s</ID><Prefix>%s</Prefix><Status>Enabled</Status><Expiration><Days>%s</Days></Expiration></Rule>', rule.id, rule.prefix, rule.expire)
-            : util.format('<Rule><ID>%s</ID><Prefix>%s</Prefix><Status>Enabled</Status><Transition><Days>%s</Days><StorageClass>GLACIER</StorageClass></Transition></Rule>', rule.id, rule.prefix, rule.glacier);
-    }));
-    xml.push('</LifecycleConfiguration>');
-    xml = xml.join('\n');
-    return xml;
+function getParams(bucket, rules) {
+    return {
+        Bucket: bucket,
+        LifecycleConfiguration: {
+            Rules: rules.map(function(rule) {
+                var result = {
+                    Prefix: rule.prefix,
+                    Status: rule.status,
+                    ID: rule.id
+                };
+                if (rule.glacier) result.Transition = {
+                    Days: rule.glacier,
+                    StorageClass: 'GLACIER'
+                };
+                else result.Expiration = { Days: rule.expire };
+
+                return result;
+            })
+        }
+    };
 }
