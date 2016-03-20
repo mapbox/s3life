@@ -1,10 +1,28 @@
 {
-    "name": "s3life",
-    "version": "0.0.1",
-    "description": "Helper for setting s3 lifecycle policy.",
-    "private": true,
-    "dependencies": { "aws-sdk": "^2.0.25" },
-    "main": "./s3life",
-    "bin": { "s3life": "./s3life" },
-    "engines": { "node": ">= 0.10.x" }
+  "name": "s3life",
+  "version": "0.0.1",
+  "description": "Helper for setting s3 lifecycle policy.",
+  "main": "index.js",
+  "scripts": {
+    "pretest": "eslint index.js test bin",
+    "test": "nyc tape test/*.test.js",
+    "coverage": "nyc --reporter html tape test/*.test.js && opener coverage/index.html"
+  },
+  "bin": {
+    "s3life": "./bin/s3life.js"
+  },
+  "engines": {
+    "node": "0.10.42"
+  },
+  "dependencies": {
+    "aws-sdk": "^2.2.45",
+    "minimist": "^1.2.0"
+  },
+  "devDependencies": {
+    "d3-queue": "^2.0.3",
+    "eslint": "^2.4.0",
+    "nyc": "^6.1.1",
+    "opener": "^1.4.1",
+    "tape": "^4.5.1"
+  }
 }
