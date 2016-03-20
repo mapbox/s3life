@@ -466,9 +466,11 @@ test('[single bucket] consecutive testing', function(t) {
   t.test('[putRule] second rule with the same prefix', function(assert) {
     s3life.putRule(testBucket, {
       ID: 'fifth-rule',
-      Prefix: 'test5/',
+      Prefix: 'test4/',
       Status: 'Enabled',
-      Expiration: { Days: 5 }
+      Transitions: [
+        { Days: 1, StorageClass: 'GLACIER' }
+      ]
     }, function(err) {
       assert.ifError(err, 'success');
       setTimeout(function() {
@@ -490,18 +492,12 @@ test('[single bucket] consecutive testing', function(t) {
                 Status: 'Enabled',
                 Expiration: { Days: 4 },
                 NoncurrentVersionTransitions: [],
-                Transitions: []
-              },
-              {
-                ID: 'fifth-rule',
-                Prefix: 'test5/',
-                Status: 'Enabled',
-                Expiration: { Days: 5 },
-                NoncurrentVersionTransitions: [],
-                Transitions: []
+                Transitions: [
+                  { Days: 1, StorageClass: 'GLACIER' }
+                ]
               }
             ]
-          }, 'read expected policy');
+          }, 'adjusted existing rule for duplicate prefix');
           assert.end();
         });
       }, 2000);
@@ -540,7 +536,9 @@ test('[single bucket] consecutive testing', function(t) {
                 Status: 'Enabled',
                 Expiration: { Days: 4 },
                 NoncurrentVersionTransitions: [],
-                Transitions: []
+                Transitions: [
+                  { Days: 1, StorageClass: 'GLACIER' }
+                ]
               },
               {
                 ID: 'fifth-rule',
@@ -583,7 +581,9 @@ test('[single bucket] consecutive testing', function(t) {
                 Status: 'Enabled',
                 Expiration: { Days: 4 },
                 NoncurrentVersionTransitions: [],
-                Transitions: []
+                Transitions: [
+                  { Days: 1, StorageClass: 'GLACIER' }
+                ]
               }
             ]
           }, 'read expected policy');
@@ -615,7 +615,9 @@ test('[single bucket] consecutive testing', function(t) {
                 Status: 'Enabled',
                 Expiration: { Days: 4 },
                 NoncurrentVersionTransitions: [],
-                Transitions: []
+                Transitions: [
+                  { Days: 1, StorageClass: 'GLACIER' }
+                ]
               }
             ]
           }, 'read expected policy');

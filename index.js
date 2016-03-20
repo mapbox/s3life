@@ -153,6 +153,18 @@ function putRule(bucket, rule, s3, callback) {
       if (existingRule.ID === rule.ID) {
         replaced = true;
         return rule;
+      } else if (existingRule.Prefix === rule.Prefix) {
+        if (rule.AbortIncompleteMultipartUpload) existingRule.AbortIncompleteMultipartUpload = rule.AbortIncompleteMultipartUpload;
+        if (rule.Expiration) existingRule.Expiration = rule.Expiration;
+        if (rule.NoncurrentVersionExpiration) existingRule.NoncurrentVersionExpiration = rule.NoncurrentVersionExpiration;
+        if (rule.Transitions) rule.Transitions.forEach(function(transition) {
+          existingRule.Transitions.push(transition);
+        });
+        if (rule.NoncurrentVersionTransitions) rule.NoncurrentVersionTransitions.forEach(function(transition) {
+          existingRule.NoncurrentVersionTransitions.push(transition);
+        });
+        replaced = true;
+        return existingRule;
       } else {
         return existingRule;
       }
