@@ -59,18 +59,18 @@ Rule with an ID specified:
 abc: expire * 1d
 ```
 
-### s3life read <bucket> [-j | --json]
+### s3life read \<bucket\> [-j | --json]
 
 Read the Lifecycle Configuration for the specified bucket. The `--json` flag
 prints the configuration as JSON. Default behavior is to print rules as simple
 strings.
 
-### s3life put-rule <bucket> <rule>
+### s3life put-rule \<bucket\> \<rule\>
 
 Add or overwrite a rule in a bucket. If no ID is specified, a new rule will always
 be added. Specify an ID as part of the rule in order to update an existing rule.
 
-### s3life remove-rule <bucket> <ruleid>
+### s3life remove-rule \<bucket\> \<ruleid\>
 
 Remove a rule from a bucket by specifying its ID.
 
