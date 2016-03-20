@@ -1,31 +1,80 @@
-s3life
-------
+# s3life
 
 Helper for managing S3 lifecycle policies.
 
-    sudo npm install -g https://github.com/mapbox/s3life/tarball/master
+## CLI Usage
 
-    Usage:
-      s3life <bucket> ls
-      s3life <bucket> add <prefix> [expire|glacier] <days>
-      s3life <bucket> rm <prefix>
-      s3life <bucket> del
+### Rules as strings
 
-    s3life <bucket> ls
+The CLI tool allows you to read and specify Lifecycle Configuration rules as
+strings. The format of the string indicates the rule's details.
 
-      List all rules in a bucket's lifecycle policy.
+Multipart Upload Expiration:
 
-    s3life <bucket> add <prefix> [expire|glacier] <days>
+```
+# expire multipart uploads older than 7 days bucket-wide
+mpu * 7d
+```
 
-      Add a one or more rules to a lifecycle policy. Use {hex} or {dec} to
-      specify a templating token to generate multiple rules using character
-      ranges (0-f or 0-9).
+Object & Version Expiration:
 
-    s3life <bucket> rm <prefix>
+```
+# expire objects under `temp/` after 1 day
+expire temp/ 1d
 
-      Remove a single rule from a lifecycle policy.
+# expire objects under `temp/` on March 20th, 2016
+expire temp/ 1458432000000
 
-    s3life <bucket> del
+# expire non-current versions under `temp/` after 1 day
+expire version temp/ 1d
+```
 
-      Remove entire lifecycle policy.
+Storage transitions:
 
+```
+# move objects to infrequent-access after 30 days
+transition * ia 30d
+
+# move objects to glacier after 2 days
+transition * glacier 2d
+
+# move non-current versions to glacier after 1 day
+transition version * glacier 1d
+```
+
+Complex rules. All actions must share the same prefix:
+
+```
+# specify multiple transitions in one rule
+transition * ia 30d, transition * glacier 60d
+
+# transitions and expiration
+transition * ia 30d, transition * glacier 60d, expire 100d
+```
+
+Rule with an ID specified:
+
+```
+# ID `abc`
+abc: expire * 1d
+```
+
+### s3life read <bucket> [-j | --json]
+
+Read the Lifecycle Configuration for the specified bucket. The `--json` flag
+prints the configuration as JSON. Default behavior is to print rules as simple
+strings.
+
+### s3life put-rule <bucket> <rule>
+
+Add or overwrite a rule in a bucket. If no ID is specified, a new rule will always
+be added. Specify an ID as part of the rule in order to update an existing rule.
+
+### s3life remove-rule <bucket> <ruleid>
+
+Remove a rule from a bucket by specifying its ID.
+
+## Testing
+
+Running tests requires authentication. Environment must be configured for access
+to interact with Lifecycle Configuration on Mapbox buckets.
