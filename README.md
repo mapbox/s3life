@@ -42,6 +42,9 @@ expire temp/ 1458432000000
 
 # expire non-current versions under `temp/` after 1 day
 expire version temp/ 1d
+
+# expire deleted object markers under `temp/` with no non-current versions
+expire tombstones temp/
 ```
 
 Storage transitions:
