@@ -227,7 +227,7 @@ function removeRule(bucket, ruleId, s3, callback) {
  */
 function ruleFromString(str) {
   var mpu = /^mpu (.*) (\d*)d$/;
-  var expire = /^expire (version )?(.*) (\d+)(d)?$/;
+  var expire = /^expire (version |tombstones )?(.*?)( (\d+)(d)?)?$/;
   var transition = /^transition (version )?(.*) (glacier|ia) (\d*)(d)?$/;
 
   var id = str.split(': ').length === 2 ? str.split(': ')[0] : idForRule(str);
@@ -253,10 +253,12 @@ function ruleFromString(str) {
       if (prefix && prefix !== match[2])
         throw new Error('Invalid rule string: all effects must share the same prefix');
 
-      if (match[1])
-        rule.NoncurrentVersionExpiration = match[4] ? { NoncurrentDays: Number(match[3]) } : { Date: Number(match[3]) };
+      if (match[1] && match[1] === 'version ')
+        rule.NoncurrentVersionExpiration = match[5] ? { NoncurrentDays: Number(match[4]) } : { Date: Number(match[4]) };
+      else if (match[1] && match[1] === 'tombstones ')
+        rule.Expiration = { ExpiredObjectDeleteMarker: true };
       else
-        rule.Expiration = match[4] ? { Days: Number(match[3]) } : { Date: Number(match[3]) };
+        rule.Expiration = match[5] ? { Days: Number(match[4]) } : { Date: Number(match[4]) };
     }
 
     match = effect.match(transition);
@@ -312,9 +314,10 @@ function ruleToString(rule) {
   if (rule.Expiration)
     effects.push(util.format(
       'expire %s %s',
-      rule.Prefix || '*',
-      rule.Expiration.Days || +new Date(rule.Expiration.Date)
-    ) + (rule.Expiration.Days ? 'd' : ''));
+      rule.Expiration.ExpiredObjectDeleteMarker ? 'tombstones ' + (rule.Prefix || '*') : (rule.Prefix || '*'),
+      rule.Expiration.ExpiredObjectDeleteMarker ? '' :
+        (rule.Expiration.Days || +new Date(rule.Expiration.Date)) + (rule.Expiration.Days ? 'd' : '')
+    ).trim());
 
   if (rule.NoncurrentVersionExpiration && !rule.NoncurrentVersionExpiration.NoncurrentDays)
     throw new Error('Noncurrent version transitions must specify days');

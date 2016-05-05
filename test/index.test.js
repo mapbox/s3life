@@ -114,8 +114,15 @@ test('[ruleToString]', function(assert) {
     Prefix: '',
     Expiration: { Days: 1 }
   };
-  assert.equal(s3life.ruleToString(rule), 'test: expire * 1d');
+  assert.equal(s3life.ruleToString(rule), 'test: expire * 1d', 'individual expiration rule, bucket-wide');
 
+  rule = {
+    ID: 'test',
+    Prefix: 'ham/',
+    Expiration: { ExpiredObjectDeleteMarker: true }
+  };
+
+  assert.equal(s3life.ruleToString(rule), 'test: expire tombstones ham/', 'individual expiration rule, tombstones');
   assert.end();
 });
 
@@ -166,6 +173,15 @@ test('[ruleFromString]', function(assert) {
       NoncurrentVersionExpiration: { Date: +new Date('2016-03-20') },
       Status: 'Enabled'
     }, 'individual version expiration rule, date');
+
+  assert.deepEqual(
+    s3life.ruleFromString('test: expire tombstones test/'),
+    {
+      ID: 'test',
+      Prefix: 'test/',
+      Expiration: { ExpiredObjectDeleteMarker: true },
+      Status: 'Enabled'
+    }, 'individual tombstone expiration rule');
 
   assert.deepEqual(
     s3life.ruleFromString('test: transition test/ glacier 1d'),
