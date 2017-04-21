@@ -321,7 +321,7 @@ test('[single bucket] consecutive testing', function(t) {
   t.test('[removePolicy] remove any existing policy from the bucket', function(assert) {
     s3life.removePolicy(testBucket, function(err) {
       assert.ifError(err, 'success');
-      assert.end();
+      setTimeout(function() { assert.end(); }, 1000);
     });
   });
 
@@ -347,29 +347,48 @@ test('[single bucket] consecutive testing', function(t) {
       ]
     }, function(err) {
       assert.ifError(err, 'success');
-      assert.end();
+      setTimeout(function() { assert.end(); }, 1000);
+    });
+  });
+
+  t.test('[putPolicy] removeRule removes policy if no rules left', function(assert) {
+    s3life.removeRule(testBucket, 'first-test', function(err) {
+      assert.ifError(err, 'success');
+      setTimeout(function() { assert.end(); }, 1000);
     });
   });
 
   t.test('[readPolicy] when policy exists', function(assert) {
-    setTimeout(function() {
-      s3life.readPolicy(testBucket, function(err, policy) {
-        assert.ifError(err, 'success');
-        assert.deepEqual(policy, {
-          Rules: [
-            {
-              ID: 'first-test',
-              Prefix: 'test/',
-              Status: 'Enabled',
-              Expiration: { Days: 1 },
-              NoncurrentVersionTransitions: [],
-              Transitions: []
-            }
-          ]
-        }, 'read expected policy');
-        assert.end();
-      });
-    }, 2000);
+    s3life.putPolicy(testBucket, {
+      Rules: [
+        {
+          ID: 'first-test',
+          Prefix: 'test/',
+          Status: 'Enabled',
+          Expiration: { Days: 1 }
+        }
+      ]
+    }, function(err) {
+      assert.ifError(err, 'wrote policy');
+      setTimeout(function() {
+        s3life.readPolicy(testBucket, function(err, policy) {
+          assert.ifError(err, 'success');
+          assert.deepEqual(policy, {
+            Rules: [
+              {
+                ID: 'first-test',
+                Prefix: 'test/',
+                Status: 'Enabled',
+                Expiration: { Days: 1 },
+                NoncurrentVersionTransitions: [],
+                Transitions: []
+              }
+            ]
+          }, 'read expected policy');
+          setTimeout(function() { assert.end(); }, 1000);
+        });
+      }, 2000);
+    });
   });
 
   t.test('[putPolicy] replaces existing policy', function(assert) {
@@ -399,7 +418,7 @@ test('[single bucket] consecutive testing', function(t) {
               }
             ]
           }, 'read expected policy');
-          assert.end();
+          setTimeout(function() { assert.end(); }, 1000);
         });
       }, 2000);
     });
@@ -436,7 +455,7 @@ test('[single bucket] consecutive testing', function(t) {
               }
             ]
           }, 'read expected policy');
-          assert.end();
+          setTimeout(function() { assert.end(); }, 1000);
         });
       }, 2000);
     });
@@ -473,7 +492,7 @@ test('[single bucket] consecutive testing', function(t) {
               }
             ]
           }, 'read expected policy');
-          assert.end();
+          setTimeout(function() { assert.end(); }, 1000);
         });
       }, 2000);
     });
@@ -514,7 +533,7 @@ test('[single bucket] consecutive testing', function(t) {
               }
             ]
           }, 'adjusted existing rule for duplicate prefix');
-          assert.end();
+          setTimeout(function() { assert.end(); }, 1000);
         });
       }, 2000);
     });
@@ -569,7 +588,7 @@ test('[single bucket] consecutive testing', function(t) {
               }
             ]
           }, 'read expected policy');
-          assert.end();
+          setTimeout(function() { assert.end(); }, 1000);
         });
       }, 2000);
     });
@@ -603,7 +622,7 @@ test('[single bucket] consecutive testing', function(t) {
               }
             ]
           }, 'read expected policy');
-          assert.end();
+          setTimeout(function() { assert.end(); }, 1000);
         });
       }, 2000);
     });
@@ -637,7 +656,7 @@ test('[single bucket] consecutive testing', function(t) {
               }
             ]
           }, 'read expected policy');
-          assert.end();
+          setTimeout(function() { assert.end(); }, 1000);
         });
       }, 2000);
     });
@@ -650,7 +669,7 @@ test('[single bucket] consecutive testing', function(t) {
         s3life.readPolicy(testBucket, function(err, policy) {
           assert.notOk(err, 'checked after removal');
           assert.notOk(policy, 'policy was removed');
-          assert.end();
+          setTimeout(function() { assert.end(); }, 1000);
         });
       }, 2000);
     });
