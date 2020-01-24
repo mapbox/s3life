@@ -21,7 +21,7 @@
   "devDependencies": {
     "d3-queue": "^2.0.3",
     "eslint": "^2.4.0",
-    "nyc": "^6.1.1",
+    "nyc": "^15.0.0",
     "opener": "^1.4.1",
     "tape": "^4.5.1"
   }

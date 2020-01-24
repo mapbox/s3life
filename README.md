@@ -1,5 +1,9 @@
 # s3life
 
+🌇 _As of January 2020, this module is deprecated. It is provided as-is, with no warranty. We are not accepting new bugfixes or feature requests at this time._
+
+---
+
 Helper for managing S3 lifecycle policies.
 
 ## CLI Usage
