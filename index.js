@@ -212,6 +212,8 @@ function removeRule(bucket, ruleId, s3, callback) {
       return newRules;
     }, []);
 
+    if (!policy.Rules.length) return removePolicy(bucket, s3, callback);
+
     s3.putBucketLifecycleConfiguration({
       Bucket: bucket,
       LifecycleConfiguration: policy
